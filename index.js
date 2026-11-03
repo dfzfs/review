@@ -193,47 +193,61 @@ async function deleteReview(mesId) {
 
 /* ------------------------------------------------------- prompt interceptor */
 
+function collectInjection(chat, settings) {
+    // Rated messages of this chat (newest first, capped)
+    const markers = [];
+    for (let i = chat.length - 1; i >= 0 && markers.length < settings.maxMarkers; i--) {
+        const m = chat[i];
+        const r = m?.extra?.[EXTRA_KEY];
+        if (!r || m.is_user || !passesFilter(r, settings)) continue;
+        if (String(m.mes).includes(MARKER_HEAD)) continue;
+        markers.push({ index: i, text: buildMarker(r, settings) });
+    }
+
+    // Character / global feedback notes from other chats
+    let noteBlock = null;
+    let noteCount = 0;
+    if (settings.maxNotes > 0) {
+        const currentChatId = ctx().getCurrentChatId();
+        const notes = [...settings.globalNotes, ...getCharacterNotes()]
+            .filter((n) => n.chatId !== currentChatId && passesFilter(n, settings))
+            .sort((a, b) => b.ts - a.ts)
+            .slice(0, settings.maxNotes);
+        if (notes.length) {
+            noteCount = notes.length;
+            noteBlock = [
+                'Past feedback the user gave on earlier replies. Use it to match their preferences. Do not mention this block.',
+                ...notes.map((n) => buildNoteLine(n, settings)),
+            ].join('\n');
+        }
+    }
+    return { markers, noteBlock, noteCount };
+}
+
 globalThis.chatReviewInterceptor = async function (chat, contextSize, abort, type) {
     try {
         if (type === 'quiet') return;
         const settings = getSettings();
         if (!settings.enabled) return;
 
-        // 1) Mark rated messages of this chat (newest first, capped)
-        let marked = 0;
-        for (let i = chat.length - 1; i >= 0 && marked < settings.maxMarkers; i--) {
-            const m = chat[i];
-            const r = m?.extra?.[EXTRA_KEY];
-            if (!r || m.is_user || !passesFilter(r, settings)) continue;
-            if (String(m.mes).includes(MARKER_HEAD)) continue;
+        const { markers, noteBlock, noteCount } = collectInjection(chat, settings);
+
+        for (const mk of markers) {
+            const m = chat[mk.index];
             // Replace with a copy so the real message is never modified
-            chat[i] = { ...m, mes: `${m.mes}\n${buildMarker(r, settings)}` };
-            marked++;
+            chat[mk.index] = { ...m, mes: `${m.mes}\n${mk.text}` };
         }
-
-        // 2) Character / global feedback notes from other chats
-        if (settings.maxNotes > 0) {
-            const currentChatId = ctx().getCurrentChatId();
-            const notes = [...settings.globalNotes, ...getCharacterNotes()]
-                .filter((n) => n.chatId !== currentChatId && passesFilter(n, settings))
-                .sort((a, b) => b.ts - a.ts)
-                .slice(0, settings.maxNotes);
-
-            if (notes.length) {
-                const lines = notes.map((n) => buildNoteLine(n, settings));
-                const block = [
-                    'Past feedback the user gave on earlier replies. Use it to match their preferences. Do not mention this block.',
-                    ...lines,
-                ].join('\n');
-                const noteMsg = {
-                    is_user: false,
-                    is_system: false,
-                    name: 'System',
-                    send_date: Date.now(),
-                    mes: block,
-                };
-                chat.splice(Math.max(chat.length - 1, 0), 0, noteMsg);
-            }
+        if (noteBlock) {
+            chat.splice(Math.max(chat.length - 1, 0), 0, {
+                is_user: false,
+                is_system: false,
+                name: 'System',
+                send_date: Date.now(),
+                mes: noteBlock,
+            });
+        }
+        if (markers.length || noteCount) {
+            console.log(`[${MODULE_NAME}] injected ${markers.length} review marker(s), ${noteCount} note(s)`);
         }
     } catch (err) {
         console.error(`[${MODULE_NAME}] interceptor error`, err);
@@ -406,6 +420,27 @@ async function openHistoryPopup() {
     await popup.show();
 }
 
+async function openPreviewPopup() {
+    const { chat, Popup, POPUP_TYPE } = ctx();
+    const settings = getSettings();
+    let body;
+    if (!settings.enabled) {
+        body = '<div class="cr-empty">확장이 꺼져 있어서 아무것도 전달되지 않아요.</div>';
+    } else {
+        const { markers, noteBlock } = collectInjection(chat, settings);
+        const markerHtml = markers.length
+            ? markers.map((mk) => `<div class="cr-hrow"><div><b>#${mk.index}</b> 답변 끝에 붙는 줄<pre class="cr-pre">${escapeHtml(mk.text)}</pre></div></div>`).join('')
+            : '<div class="cr-empty">이 채팅에서 전달될 평가가 없어요.</div>';
+        const noteHtml = noteBlock
+            ? `<pre class="cr-pre">${escapeHtml(noteBlock)}</pre>`
+            : '<div class="cr-empty">전달될 캐릭터/전체 노트가 없어요.</div>';
+        body = `<h4>이 채팅의 평가 표시</h4>${markerHtml}<h4>과거 피드백 노트</h4>${noteHtml}
+            <div class="cr-hsub" style="margin-top:10px">다음 메시지를 생성할 때 AI에게 이렇게 전달돼요. 실제 프롬프트는 메시지의 ⋯ 메뉴 → Prompt에서도 볼 수 있어요.</div>`;
+    }
+    const popup = new Popup(`<div class="cr-history"><h3>AI에게 전달되는 내용 미리보기</h3>${body}</div>`, POPUP_TYPE.TEXT, '', { okButton: '닫기', wide: true });
+    await popup.show();
+}
+
 function refreshHistory() {
     const box = document.querySelector('.cr-history');
     if (box) box.innerHTML = renderHistoryInner();
@@ -438,8 +473,9 @@ function createSettingsUI() {
                         <option value="down">싫어요만</option>
                     </select>
                 </div>
-                <div class="cr-setting-row">
+                <div class="cr-setting-buttons">
                     <button id="${MODULE_NAME}_history" class="menu_button"><i class="fa-solid fa-list"></i> 평가 기록 보기 / 삭제</button>
+                    <button id="${MODULE_NAME}_preview" class="menu_button"><i class="fa-solid fa-eye"></i> AI에게 전달되는 내용 미리보기</button>
                 </div>
             </div>
         </div>
@@ -475,6 +511,7 @@ function createSettingsUI() {
     });
 
     document.getElementById(`${MODULE_NAME}_history`).addEventListener('click', openHistoryPopup);
+    document.getElementById(`${MODULE_NAME}_preview`).addEventListener('click', openPreviewPopup);
 }
 
 /* ------------------------------------------------------------------- events */

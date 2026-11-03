@@ -11,6 +11,9 @@
 .cr-bar.cr-open .cr-inline { display: block; }
 .cr-reason { width: 100%; min-height: 70px; resize: vertical; box-sizing: border-box; }
 .cr-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.cr-row .cr-scope { flex: 1 1 100%; width: 100%; }
+.cr-bar .menu_button,
+.cr-settings .menu_button { width: auto; min-width: max-content; white-space: nowrap; flex: 0 0 auto; padding: 6px 14px; }
 
 .cr-history { text-align: left; max-height: 60vh; overflow-y: auto; }
 .cr-history h4 { margin: 14px 0 6px 0; }
@@ -23,3 +26,7 @@
 
 .cr-settings .cr-setting-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 6px 0; }
 .cr-settings input[type="number"] { width: 80px; }
+
+.cr-setting-buttons { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.cr-setting-buttons .menu_button { width: 100%; justify-content: center; }
+.cr-pre { white-space: pre-wrap; word-break: break-word; margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: rgba(128,128,128,0.15); font-size: 0.85em; }
