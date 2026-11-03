@@ -1,0 +1,25 @@
+/* Chat Review */
+.cr-bar { margin-top: 6px; text-align: left; }
+.cr-actions { display: flex; align-items: center; gap: 12px; opacity: 0.85; }
+.cr-thumb { cursor: pointer; opacity: 0.45; font-size: 1.05em; transition: opacity 0.15s, color 0.15s; user-select: none; }
+.cr-thumb:hover { opacity: 0.9; }
+.cr-thumb.cr-on[data-vote="up"] { opacity: 1; color: #4caf50; }
+.cr-thumb.cr-on[data-vote="down"] { opacity: 1; color: #e53935; }
+.cr-summary { font-size: 0.8em; opacity: 0.65; word-break: break-word; }
+
+.cr-inline { display: none; margin-top: 6px; }
+.cr-bar.cr-open .cr-inline { display: block; }
+.cr-reason { width: 100%; min-height: 70px; resize: vertical; box-sizing: border-box; }
+.cr-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+
+.cr-history { text-align: left; max-height: 60vh; overflow-y: auto; }
+.cr-history h4 { margin: 14px 0 6px 0; }
+.cr-hrow {
+    display: flex; gap: 8px; align-items: flex-start; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+.cr-hsub { opacity: 0.75; font-size: 0.85em; word-break: break-word; }
+.cr-empty { opacity: 0.6; font-size: 0.9em; }
+
+.cr-settings .cr-setting-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 6px 0; }
+.cr-settings input[type="number"] { width: 80px; }
